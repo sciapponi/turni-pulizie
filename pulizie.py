@@ -27,7 +27,7 @@ class TurniPulizieApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Gestione Turni Pulizie")
-        self.root.geometry("1020x820")
+        self.root.geometry("1080x820")
 
         # Carica la configurazione da file JSON se presente, altrimenti usa i default
         self.persone, self.mansioni = self.carica_configurazione()
@@ -95,7 +95,7 @@ class TurniPulizieApp:
 
     def setup_ui(self):
         # --- Frame Selezione Periodo e Configurazione ---
-        top_frame = ttk.LabelFrame(self.root, text=" 🗓️ Seleziona Periodo ")
+        top_frame = ttk.LabelFrame(self.root, text=" 🗓️ Seleziona Periodo e Configurazione ")
         top_frame.pack(fill="x", padx=15, pady=8)
 
         ttk.Label(top_frame, text="Mese:").grid(
@@ -123,14 +123,21 @@ class TurniPulizieApp:
             text="Carica Mese",
             command=self.aggiorna_settimane_ui,
         )
-        btn_carica.grid(row=0, column=4, padx=15, pady=5)
+        btn_carica.grid(row=0, column=4, padx=10, pady=5)
 
         btn_gestisci_persone = ttk.Button(
             top_frame,
             text="⚙️ Gestisci Coinquilini",
             command=self.apri_gestione_persone,
         )
-        btn_gestisci_persone.grid(row=0, column=5, padx=10, pady=5)
+        btn_gestisci_persone.grid(row=0, column=5, padx=5, pady=5)
+
+        btn_gestisci_mansioni = ttk.Button(
+            top_frame,
+            text="🧹 Gestisci Mansioni",
+            command=self.apri_gestione_mansioni,
+        )
+        btn_gestisci_mansioni.grid(row=0, column=6, padx=5, pady=5)
 
         # --- Frame Presenze ---
         self.frame_presenze = ttk.LabelFrame(
@@ -217,7 +224,6 @@ class TurniPulizieApp:
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor="w", padx=15, pady=10)
 
-        # Container scrollabile per la lista delle persone
         canvas = tk.Canvas(win, borderwidth=0, highlightthickness=0)
         scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
@@ -288,6 +294,119 @@ class TurniPulizieApp:
             self.aggiorna_settimane_ui()
             win.destroy()
             messagebox.showinfo("Successo", "Lista coinquilini aggiornata!")
+
+        ttk.Button(btn_box, text="💾 Salva Modifiche", command=salva_modifiche).pack(
+            side="right", padx=5
+        )
+
+    def apri_gestione_mansioni(self):
+        """Apre una finestra pop-up per aggiungere, rimuovere e rinominare le mansioni."""
+        win = tk.Toplevel(self.root)
+        win.title("Gestisci Mansioni")
+        win.geometry("450x500")
+        win.grab_set()
+
+        ttk.Label(
+            win,
+            text="Gestisci la lista delle mansioni da svolgere:",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(anchor="w", padx=15, pady=10)
+
+        canvas = tk.Canvas(win, borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="top", fill="both", expand=True, padx=15, pady=5)
+        scrollbar.pack(side="right", fill="y")
+
+        entries = []
+
+        def render_lista():
+            for child in scrollable_frame.winfo_children():
+                child.destroy()
+            entries.clear()
+
+            for idx, nome_m in enumerate(temp_mansioni):
+                row = ttk.Frame(scrollable_frame)
+                row.pack(fill="x", pady=3, expand=True)
+
+                ttk.Label(row, text=f"#{idx + 1}:", width=4).pack(side="left")
+                ent = ttk.Entry(row)
+                ent.insert(0, nome_m)
+                ent.pack(side="left", fill="x", expand=True, padx=5)
+                entries.append(ent)
+
+                def elimina_mansione(pos=idx):
+                    if len(temp_mansioni) <= 1:
+                        messagebox.showwarning(
+                            "Attenzione",
+                            "Deve esserci almeno una mansione!",
+                        )
+                        return
+                    # Salva prima le modifiche correnti negli entry
+                    for i, e in enumerate(entries):
+                        if i < len(temp_mansioni):
+                            temp_mansioni[i] = e.get().strip()
+                    temp_mansioni.pop(pos)
+                    render_lista()
+
+                btn_del = ttk.Button(
+                    row, text="🗑️", width=3, command=elimina_mansione
+                )
+                btn_del.pack(side="right", padx=2)
+
+        temp_mansioni = self.mansioni.copy()
+
+        def aggiungi_mansione():
+            # Salva il testo corrente dagli entry prima di aggiungerne una
+            for i, e in enumerate(entries):
+                if i < len(temp_mansioni):
+                    temp_mansioni[i] = e.get().strip()
+            temp_mansioni.append(f"Nuova Mansione {len(temp_mansioni) + 1}")
+            render_lista()
+
+        render_lista()
+
+        btn_box = ttk.Frame(win)
+        btn_box.pack(fill="x", padx=15, pady=10)
+
+        ttk.Button(
+            btn_box, text="➕ Aggiungi Mansione", command=aggiungi_mansione
+        ).pack(side="left", padx=5)
+
+        def salva_modifiche():
+            nuove_mansioni = []
+            for ent in entries:
+                val = ent.get().strip()
+                if val and val not in nuove_mansioni:
+                    nuove_mansioni.append(val)
+
+            if not nuove_mansioni:
+                messagebox.showwarning("Attenzione", "La lista mansioni non può essere vuota!")
+                return
+
+            if len(self.persone) < len(nuove_mansioni):
+                messagebox.showwarning(
+                    "Attenzione",
+                    f"Ci sono {len(nuove_mansioni)} mansioni ma solo {len(self.persone)} persone! "
+                    "Aggiungi prima altre persone.",
+                )
+                return
+
+            self.mansioni = nuove_mansioni
+            self.salva_configurazione()
+            self.reset_storico()
+            self.crea_tabella_ui()
+            self.aggiorna_settimane_ui()
+            win.destroy()
+            messagebox.showinfo("Successo", "Lista mansioni aggiornata!")
 
         ttk.Button(btn_box, text="💾 Salva Modifiche", command=salva_modifiche).pack(
             side="right", padx=5
